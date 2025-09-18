@@ -15,11 +15,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const COURSE_LINKS_FILENAME = "courses.store"
-const SUBSCRIPTIONS_FILENAME = "subscriptions.store"
+const COURSE_LINKS_FILENAME = ".store/courses.store"
+const SUBSCRIPTIONS_FILENAME = ".store/subscriptions.store"
+const LATEST_ANNOUNCEMENT_FILENAME = ".store/announcements.store"
 
 var userSubscriptions = make(map[string][]string)
 var coursesLinks = make(map[string]string)
+var latestAnnouncements = make(map[string]fenixgoscraper.Announcement)
 var running bool = false
 
 func main() {
@@ -38,7 +40,9 @@ func main() {
 		log.Printf("WARNING: %s not found. One will be created at the end of execution", SUBSCRIPTIONS_FILENAME)
 	}
 
-	loadLatestAnnouncements()
+	if err = loadLatestAnnouncements(); err != nil {
+		log.Printf("WARNING: %s not found. One will be created at the end of execution", LATEST_ANNOUNCEMENT_FILENAME)
+	}
 
 	dg.AddHandler(commands)
 	dg.Identify.Intents = discordgo.IntentsGuildMessages
@@ -59,7 +63,11 @@ func main() {
 	if err = storeSubscriptions(); err != nil {
 		log.Fatalln("FATAL: Error storing subscriptions", err)
 	}
-	storeLatestAnnouncements()
+
+	if err = storeLatestAnnouncements(); err != nil {
+		log.Fatalln("FATAL: Error storing latest announcements", err)
+	}
+
 	dg.Close()
 }
 
@@ -77,7 +85,7 @@ func storeCourseLinks() error {
 
 func storeSubscriptions() error {
 	var data string
-	log.Println("INFO: Storing Subscriptions")
+	log.Println("INFO: Storing subscriptions")
 
 	for course, userIDs := range userSubscriptions {
 		data += fmt.Sprintf("%s\n", course)
@@ -92,8 +100,17 @@ func storeSubscriptions() error {
 	return err
 }
 
-func storeLatestAnnouncements() {
+func storeLatestAnnouncements() error {
+	var data string
+	log.Println("INFO: Storing latest announcements")
 
+	for course, announcement := range latestAnnouncements {
+		data += fmt.Sprintf("%s\n%s|%s\n", course, announcement.Message, announcement.Link)
+	}
+
+	err := os.WriteFile(LATEST_ANNOUNCEMENT_FILENAME, []byte(data), 0666)
+
+	return err
 }
 
 func parseFile(fileName string) ([]string, error) {
@@ -103,14 +120,6 @@ func parseFile(fileName string) ([]string, error) {
 	}
 
 	return strings.Split(string(data), "\n"), err
-}
-
-func endsWithNewlineOffset(splitData []string) int {
-	if len(splitData)%2 == 1 {
-		return 1
-	}
-
-	return 0
 }
 
 func loadCourseLinks() error {
@@ -128,8 +137,8 @@ func loadCourseLinks() error {
 		return err
 	}
 
-	for i := 0; i < len(splitData)-endsWithNewlineOffset(splitData); i += 2 {
-		coursesLinks[splitData[i]] = splitData[i+1]
+	for i := 1; i < len(splitData); i += 2 {
+		coursesLinks[splitData[i-1]] = splitData[i]
 	}
 
 	return nil
@@ -148,10 +157,10 @@ func loadSubscriptions() error {
 		return err
 	}
 
-	for i := 0; i < len(splitData)-endsWithNewlineOffset(splitData); i += 2 {
-		course := splitData[i]
+	for i := 1; i < len(splitData); i += 2 {
+		course := splitData[i-1]
 
-		for id := range strings.SplitSeq(splitData[i+1], "|") {
+		for id := range strings.SplitSeq(splitData[i], "|") {
 			if id == "" {
 				continue
 			}
@@ -163,8 +172,24 @@ func loadSubscriptions() error {
 	return nil
 }
 
-func loadLatestAnnouncements() {
+func loadLatestAnnouncements() error {
+	log.Println("INFO: Storing latest announcements")
+	splitData, err := parseFile(LATEST_ANNOUNCEMENT_FILENAME)
 
+	if err != nil {
+		return err
+	}
+
+	for i := 1; i < len(splitData); i += 2 {
+		announcement_line := strings.Split(splitData[i], "|")
+		if len(announcement_line) < 2 {
+			latestAnnouncements[splitData[i-1]] = fenixgoscraper.Announcement{Message: "", Link: ""}
+			continue
+		}
+		latestAnnouncements[splitData[i-1]] = fenixgoscraper.Announcement{Message: announcement_line[0], Link: announcement_line[1]}
+	}
+
+	return nil
 }
 
 func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -263,10 +288,15 @@ func fenixFetcher(s *discordgo.Session, m *discordgo.MessageCreate) error {
 		data, err := fenixgoscraper.Scrape(coursesLinks, 1)
 
 		if err != nil {
-			log.Fatalln("FATAL: Fetcher failure", err)
+			log.Println("WARNING: Fetcher failure", err)
 		}
 
 		for course, announcements := range data {
+			if latestAnnouncements[course].Link == announcements[0].Link {
+				continue
+			}
+
+			latestAnnouncements[course] = announcements[0]
 			s.ChannelMessageSend(m.ChannelID, parseAnnouncements(announcements[0], course))
 		}
 	}
