@@ -3,7 +3,7 @@ module fenixgobot
 go 1.25.1
 
 require (
-	github.com/WoodWood1299/fenixgoscraper v0.0.0-20250918165057-e4c744861323
+	github.com/WoodWood1299/fenixgoscraper v0.0.0-20250918215436-39ba11e451df
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/joho/godotenv v1.5.1
 )
@@ -11,7 +11,7 @@ require (
 require (
 	github.com/PuerkitoBio/goquery v1.10.3 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mmcdole/gofeed v1.3.0 // indirect
 	github.com/mmcdole/goxpp v1.1.1 // indirect
