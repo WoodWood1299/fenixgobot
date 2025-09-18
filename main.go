@@ -68,6 +68,10 @@ func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	if m.Content == "!help" {
+		help(s, m)
+	}
+
 	if m.Content == "!startfenix" {
 		startfenix(s, m)
 	}
@@ -76,6 +80,18 @@ func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 		follow(s, m)
 	}
 
+}
+
+func help(s *discordgo.Session, m *discordgo.MessageCreate) {
+	helpMsg := "## Commands:\n"
+	helpMsg += "- !startfenix - Start service\n"
+	helpMsg += "- !follow <Course> - Get notified when new announcements are published in the given course\n"
+	helpMsg += "## Courses\n"
+	for course := range courses_links {
+		helpMsg += fmt.Sprintf("- %s\n", course)
+	}
+
+	s.ChannelMessageSend(m.ChannelID, helpMsg)
 }
 
 func startfenix(s *discordgo.Session, m *discordgo.MessageCreate) {
