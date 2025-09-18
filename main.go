@@ -76,7 +76,7 @@ func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 		startfenix(s, m)
 	}
 
-	if strings.Contains(m.Content, "!follow") {
+	if strings.Split(m.Content, " ")[0] == "!follow" {
 		follow(s, m)
 	}
 
@@ -103,6 +103,11 @@ func startfenix(s *discordgo.Session, m *discordgo.MessageCreate) {
 	go fenixFetcher(s, m)
 }
 
+func courseExists(course string) bool {
+	_, ok := courses_links[course]
+	return ok
+}
+
 func follow(s *discordgo.Session, m *discordgo.MessageCreate) {
 	cmd := strings.Split(m.Content, " ")
 	if len(cmd) != 2 {
@@ -112,7 +117,7 @@ func follow(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	course := cmd[1]
 
-	if _, ok := courses_links[course]; !ok {
+	if !courseExists(course) {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course does not exist", m.Author.ID))
 		return
 	}
