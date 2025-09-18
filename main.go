@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -12,6 +14,10 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
 )
+
+var userSubscriptions = make(map[string][]string)
+var courses_links = make(map[string]string)
+var running bool = false
 
 func main() {
 	godotenv.Load()
@@ -21,7 +27,11 @@ func main() {
 		log.Fatal("Failed to initialize bot")
 	}
 
-	dg.AddHandlerOnce(messageCreate)
+	loadCourses()
+	loadSubscriptions()
+	loadLatestAnnouncement()
+
+	dg.AddHandler(commands)
 	dg.Identify.Intents = discordgo.IntentsGuildMessages
 
 	if err = dg.Open(); err != nil {
@@ -36,44 +46,106 @@ func main() {
 	dg.Close()
 }
 
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func loadCourses() {
+	courses_links["OC"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/OC112/2025-2026/1-semestre/rss/announcement"
+	courses_links["Aprendizagem"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/Apre2222/2025-2026/1-semestre/rss/announcement"
+	courses_links["RC"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/RC112/2025-2026/1-semestre/rss/announcement"
+	courses_links["AMS"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/Mod112/2025-2026/1-semestre/rss/announcement"
+}
+
+func loadSubscriptions() {
+	for k := range courses_links {
+		userSubscriptions[k] = make([]string, 0)
+	}
+}
+
+func loadLatestAnnouncement() {
+
+}
+
+func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
 
 	if m.Content == "!startfenix" {
-		go fenixUpdater(s, m)
+		startfenix(s, m)
 	}
+
+	if strings.Contains(m.Content, "!follow") {
+		follow(s, m)
+	}
+
 }
 
-func fenixUpdater(s *discordgo.Session, m *discordgo.MessageCreate) {
-	s.ChannelMessageSend(m.ChannelID, "RAHHHHHHHH")
-
-	disciplina_links := make(map[string]string)
-	disciplina_links["OC"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/OC112/2025-2026/1-semestre/rss/announcement"
-	disciplina_links["Aprendizagem"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/Apre2222/2025-2026/1-semestre/rss/announcement"
-	disciplina_links["RC"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/RC112/2025-2026/1-semestre/rss/announcement"
-	disciplina_links["AMS"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/Mod112/2025-2026/1-semestre/rss/announcement"
-
-	ans, err := fenixgoscraper.Scrape(disciplina_links, 1)
-
-	if err != nil {
-		log.Fatal(err)
+func startfenix(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if running {
+		s.ChannelMessageSend(m.ChannelID, "Already running")
+		return
 	}
+
+	go fenixFetcher(s, m)
+}
+
+func follow(s *discordgo.Session, m *discordgo.MessageCreate) {
+	cmd := strings.Split(m.Content, " ")
+	if len(cmd) != 2 {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !follow <course>", m.Author.ID))
+		return
+	}
+
+	course := cmd[1]
+
+	if _, ok := courses_links[course]; !ok {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course does not exist", m.Author.ID))
+		return
+	}
+
+	if userSubbedToCourse(m.Author.ID, course) {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Already subbed to %s", m.Author.ID, course))
+		return
+	}
+
+	userSubscriptions[course] = append(userSubscriptions[course], m.Author.ID)
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Subbed to %s", m.Author.ID, course))
+}
+
+func userSubbedToCourse(userID string, key string) bool {
+	return slices.Contains(userSubscriptions[key], userID)
+}
+
+func parseAnnouncements(announcement fenixgoscraper.Announcement, course string) string {
+	msg := ""
+	for i := 0; i < len(userSubscriptions[course]); i++ {
+		msg += fmt.Sprintf("<@%s>\n", userSubscriptions[course][i])
+	}
+
+	msg += fmt.Sprintf("%s\n", course)
+	if announcement.Message == "" {
+		return ""
+	}
+
+	msg += fmt.Sprintf("%s %s\n", announcement.Message, announcement.Link)
+	return msg
+}
+
+func fenixFetcher(s *discordgo.Session, m *discordgo.MessageCreate) {
+	running = true
+
+	s.ChannelMessageSend(m.ChannelID, "Starting Service")
 
 	for {
 		time.Sleep(5 * time.Second)
-		for disciplina, announcements := range ans {
-			msg := ""
-			//s.ChannelMessageSend(m.ChannelID,i disciplina)
-			msg += fmt.Sprintf("%s\n", disciplina)
+		data, err := fenixgoscraper.Scrape(courses_links, 1)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for course, announcements := range data {
 			for _, announcement := range announcements {
-				if announcement.Message == "" {
-					continue
-				}
-				msg += fmt.Sprintf("%s\n", fenixgoscraper.StringAnnouncement(announcement))
+				s.ChannelMessageSend(m.ChannelID, parseAnnouncements(announcement, course))
 			}
-			s.ChannelMessageSend(m.ChannelID, msg)
 		}
 	}
 }
