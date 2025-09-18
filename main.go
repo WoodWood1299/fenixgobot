@@ -213,29 +213,20 @@ func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		follow(s, m, content[1])
 
+	case "!unfollow":
+		if len(content) != 2 {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !follow <course>", m.Author.ID))
+			break
+		}
+		unfollow(s, m, content[1])
+
 	case "!addcourse":
 		if len(content) != 3 {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !addcourse <course> <link>", m.Author.ID))
 			break
 		}
 		addCourse(s, m, content[1], content[2])
-
-	case "!changecoursename":
-		if len(content) != 3 {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !changecoursename <oldName> <newName>", m.Author.ID))
-			break
-		}
-		changeCourseName(s, m, content[1], content[2])
 	}
-}
-
-func changeCourseName(s *discordgo.Session, m *discordgo.MessageCreate, oldName string, newName string) {
-	if !courseExists(oldName) {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course does not exist", m.Author.ID))
-	}
-
-	coursesLinks[newName] = coursesLinks[oldName]
-	coursesLinks[oldName] = ""
 }
 
 func addCourse(s *discordgo.Session, m *discordgo.MessageCreate, course string, link string) {
@@ -250,8 +241,10 @@ func addCourse(s *discordgo.Session, m *discordgo.MessageCreate, course string, 
 func help(s *discordgo.Session, m *discordgo.MessageCreate) {
 	helpMsg := "## Commands:\n"
 	helpMsg += "- !startfenix - Start service\n"
-	helpMsg += "- !follow <Course> - Get notified when new announcements are published in the given course\n"
-	helpMsg += "## Courses\n"
+	helpMsg += "- !follow <course> - Get notified when new announcements are published in the given course\n"
+	helpMsg += "- !unfollow <course> - Stop getting notifications from the given course"
+	helpMsg += "- !addcourse <course> <rss-link> - Add a new course to the notification system\n"
+	helpMsg += "## Current courses\n"
 	for course := range coursesLinks {
 		helpMsg += fmt.Sprintf("- %s\n", course)
 	}
@@ -275,12 +268,29 @@ func follow(s *discordgo.Session, m *discordgo.MessageCreate, course string) {
 	}
 
 	if userSubbedToCourse(m.Author.ID, course) {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Already subbed to %s", m.Author.ID, course))
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Already following %s", m.Author.ID, course))
 		return
 	}
 
 	userSubscriptions[course] = append(userSubscriptions[course], m.Author.ID)
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Subbed to %s", m.Author.ID, course))
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Followed %s", m.Author.ID, course))
+}
+
+func unfollow(s *discordgo.Session, m *discordgo.MessageCreate, course string) {
+	if !courseExists(course) {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course does not exist", m.Author.ID))
+		return
+	}
+
+	if !userSubbedToCourse(m.Author.ID, course) {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Not following %s", m.Author.ID, course))
+		return
+	}
+
+	userSubscriptions[course] = slices.DeleteFunc(userSubscriptions[course], func(s string) bool {
+		return s == m.Author.ID
+	})
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Unfollowed %s", m.Author.ID, course))
 }
 
 func userSubbedToCourse(userID string, key string) bool {
@@ -303,7 +313,8 @@ func parseAnnouncements(announcement fenixgoscraper.Announcement, course string)
 		return ""
 	}
 
-	msg += fmt.Sprintf("%s %s\n", announcement.Message, announcement.Link)
+	msg += fmt.Sprintf("%s\n", announcement.Message)
+	msg += fmt.Sprintf("%s\n", announcement.Link)
 	return msg
 }
 
