@@ -19,8 +19,8 @@ const COURSE_LINKS_FILENAME = ".store/courses.store"
 const SUBSCRIPTIONS_FILENAME = ".store/subscriptions.store"
 const LATEST_ANNOUNCEMENT_FILENAME = ".store/announcements.store"
 
-var userSubscriptions = make(map[string][]string)
 var coursesLinks = make(map[string]string)
+var userSubscriptions = make(map[string][]string)
 var latestAnnouncements = make(map[string]fenixgoscraper.Announcement)
 var running bool = false
 
@@ -193,21 +193,58 @@ func loadLatestAnnouncements() error {
 }
 
 func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.ID == s.State.User.ID {
+	content := strings.Split(m.Content, " ")
+
+	switch content[0] {
+	case s.State.User.ID:
 		return
-	}
 
-	if m.Content == "!help" {
+	case "!help":
 		help(s, m)
-	}
 
-	if m.Content == "!startfenix" {
+	case "!startfenix":
 		startfenix(s, m)
+
+	case "!follow":
+		if len(content) != 2 {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !follow <course>", m.Author.ID))
+			break
+		}
+
+		follow(s, m, content[1])
+
+	case "!addcourse":
+		if len(content) != 3 {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !addcourse <course> <link>", m.Author.ID))
+			break
+		}
+		addCourse(s, m, content[1], content[2])
+
+	case "!changecoursename":
+		if len(content) != 3 {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !changecoursename <oldName> <newName>", m.Author.ID))
+			break
+		}
+		changeCourseName(s, m, content[1], content[2])
+	}
+}
+
+func changeCourseName(s *discordgo.Session, m *discordgo.MessageCreate, oldName string, newName string) {
+	if !courseExists(oldName) {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course does not exist", m.Author.ID))
 	}
 
-	if strings.Split(m.Content, " ")[0] == "!follow" {
-		follow(s, m)
+	coursesLinks[newName] = coursesLinks[oldName]
+	coursesLinks[oldName] = ""
+}
+
+func addCourse(s *discordgo.Session, m *discordgo.MessageCreate, course string, link string) {
+	if courseExists(course) {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course already exists", m.Author.ID))
 	}
+
+	coursesLinks[course] = link
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> %s added", m.Author.ID, course))
 }
 
 func help(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -231,15 +268,7 @@ func startfenix(s *discordgo.Session, m *discordgo.MessageCreate) {
 	go fenixFetcher(s, m)
 }
 
-func follow(s *discordgo.Session, m *discordgo.MessageCreate) {
-	cmd := strings.Split(m.Content, " ")
-	if len(cmd) != 2 {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !follow <course>", m.Author.ID))
-		return
-	}
-
-	course := cmd[1]
-
+func follow(s *discordgo.Session, m *discordgo.MessageCreate, course string) {
 	if !courseExists(course) {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course does not exist", m.Author.ID))
 		return
