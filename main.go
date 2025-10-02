@@ -263,7 +263,7 @@ func help(s *discordgo.Session, m *discordgo.MessageCreate) {
 	helpMsg := "## Commands:\n"
 	helpMsg += "- !startfenix - Start service\n"
 	helpMsg += "- !follow <course> - Get notified when new announcements are published in the given course\n"
-	helpMsg += "- !unfollow <course> - Stop getting notifications from the given course"
+	helpMsg += "- !unfollow <course> - Stop getting notifications from the given course\n"
 	helpMsg += "- !addcourse <course> <rss-link> - Add a new course to the notification system\n"
 	helpMsg += "## Current courses\n"
 	for course := range coursesLinks {
