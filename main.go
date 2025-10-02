@@ -12,7 +12,6 @@ import (
 
 	"github.com/WoodWood1299/fenixgoscraper"
 	"github.com/bwmarrin/discordgo"
-	"github.com/joho/godotenv"
 )
 
 const COURSE_LINKS_FILENAME = ".store/courses.store"
@@ -25,8 +24,13 @@ var latestAnnouncements = make(map[string]fenixgoscraper.Announcement)
 var running bool = false
 
 func main() {
-	godotenv.Load()
-	Token := os.Getenv("DISCORD_TOKEN_ID")
+	//godotenv.Load()
+	Token, foundEnv := os.LookupEnv("DISCORD_TOKEN_ID")
+
+	if !foundEnv {
+		log.Fatalln("FATAL: DISCORD_TOKEN_ID environment variable not set")
+	}
+
 	dg, err := discordgo.New("Bot " + Token)
 	if err != nil {
 		log.Fatal("FATAL: Failed to initialize bot, err")
