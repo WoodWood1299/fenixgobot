@@ -3,7 +3,7 @@ module fenixgobot
 go 1.25.1
 
 require (
-	github.com/WoodWood1299/fenixgoscraper v0.0.0-20250918215436-39ba11e451df
+	github.com/WoodWood1299/fenixgoscraper v1.0.0
 	github.com/bwmarrin/discordgo v0.29.0
 )
 
