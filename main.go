@@ -56,6 +56,10 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 
+	if err = checkStoreFolderExists(); err != nil {
+		log.Fatalln("FATAL: Error creating .store folder", err)
+	}
+
 	if err = storeCourseLinks(); err != nil {
 		log.Fatalln("FATAL: Error storing course links", err)
 	}
@@ -187,6 +191,19 @@ func loadLatestAnnouncements() error {
 			continue
 		}
 		latestAnnouncements[splitData[i-1]] = fenixgoscraper.Announcement{Message: announcement_line[0], Link: announcement_line[1]}
+	}
+
+	return nil
+}
+
+func checkStoreFolderExists() error {
+	if _, err := os.Stat(".store"); os.IsNotExist(err) {
+		log.Println("INFO: .store folder does not exist, creating...")
+
+		err = os.Mkdir(".store", 0755)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
