@@ -220,30 +220,30 @@ func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case s.State.User.ID:
 		return
 
-	case "!help":
+	case "-help":
 		help(s, m)
 
-	case "!startfenix":
+	case "-startfenix":
 		startfenix(s, m)
 
-	case "!follow":
+	case "-follow":
 		if len(content) != 2 {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !follow <course>", m.Author.ID))
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -follow <course>", m.Author.ID))
 			break
 		}
 
 		follow(s, m, content[1])
 
-	case "!unfollow":
+	case "-unfollow":
 		if len(content) != 2 {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !follow <course>", m.Author.ID))
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -follow <course>", m.Author.ID))
 			break
 		}
 		unfollow(s, m, content[1])
 
-	case "!addcourse":
+	case "-addcourse":
 		if len(content) != 3 {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: !addcourse <course> <link>", m.Author.ID))
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -addcourse <course> <link>", m.Author.ID))
 			break
 		}
 		addCourse(s, m, content[1], content[2])
@@ -261,10 +261,10 @@ func addCourse(s *discordgo.Session, m *discordgo.MessageCreate, course string, 
 
 func help(s *discordgo.Session, m *discordgo.MessageCreate) {
 	helpMsg := "## Commands:\n"
-	helpMsg += "- !startfenix - Start service\n"
-	helpMsg += "- !follow <course> - Get notified when new announcements are published in the given course\n"
-	helpMsg += "- !unfollow <course> - Stop getting notifications from the given course\n"
-	helpMsg += "- !addcourse <course> <rss-link> - Add a new course to the notification system\n"
+	helpMsg += "- -startfenix - Start service\n"
+	helpMsg += "- -follow <course> - Get notified when new announcements are published in the given course\n"
+	helpMsg += "- -unfollow <course> - Stop getting notifications from the given course\n"
+	helpMsg += "- -addcourse <course> <rss-link> - Add a new course to the notification system\n"
 	helpMsg += "## Current courses\n"
 	for course := range coursesLinks {
 		helpMsg += fmt.Sprintf("- %s\n", course)
