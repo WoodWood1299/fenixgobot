@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"os/signal"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -14,17 +16,22 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-const COURSE_LINKS_FILENAME = ".store/courses.store"
-const SUBSCRIPTIONS_FILENAME = ".store/subscriptions.store"
-const LATEST_ANNOUNCEMENT_FILENAME = ".store/announcements.store"
+const (
+	courseLinksFilename        = ".store/courses.store"
+	subscriptionsFilename      = ".store/subscriptions.store"
+	latestAnnouncementFilename = ".store/announcements.store"
+)
 
-var coursesLinks = make(map[string]string)
-var userSubscriptions = make(map[string][]string)
-var latestAnnouncements = make(map[string]fenixgoscraper.Announcement)
-var running bool = false
+var (
+	coursesLinks             = make(map[string]string)
+	userSubscriptions        = make(map[string][]string)
+	latestAnnouncements      = make(map[string]fenixgoscraper.Announcement)
+	running             bool = false
+	mu                  sync.RWMutex
+)
 
 func main() {
-	//godotenv.Load()
+	// godotenv.Load()
 	Token, foundEnv := os.LookupEnv("DISCORD_TOKEN_ID")
 
 	if !foundEnv {
@@ -37,15 +44,15 @@ func main() {
 	}
 
 	if err = loadCourseLinks(); err != nil {
-		log.Printf("WARNING: %s not found. One will be created at the end of execution", COURSE_LINKS_FILENAME)
+		log.Printf("WARNING: %s not found. One will be created at the end of execution", courseLinksFilename)
 	}
 
 	if err = loadSubscriptions(); err != nil {
-		log.Printf("WARNING: %s not found. One will be created at the end of execution", SUBSCRIPTIONS_FILENAME)
+		log.Printf("WARNING: %s not found. One will be created at the end of execution", subscriptionsFilename)
 	}
 
 	if err = loadLatestAnnouncements(); err != nil {
-		log.Printf("WARNING: %s not found. One will be created at the end of execution", LATEST_ANNOUNCEMENT_FILENAME)
+		log.Printf("WARNING: %s not found. One will be created at the end of execution", latestAnnouncementFilename)
 	}
 
 	dg.AddHandler(commands)
@@ -76,47 +83,49 @@ func main() {
 		log.Fatalln("FATAL: Error storing latest announcements", err)
 	}
 
-	dg.Close()
+	if err = dg.Close(); err != nil {
+		log.Fatalln("FATAL: Error closing discordgo ", err)
+	}
 }
 
 func storeCourseLinks() error {
-	var data string
+	var data strings.Builder
 	log.Println("INFO: Storing Links")
 
 	for course, link := range coursesLinks {
-		data += fmt.Sprintf("%s\n%s\n", course, link)
+		fmt.Fprintf(&data, "%s\n%s\n", course, link)
 	}
-	err := os.WriteFile(COURSE_LINKS_FILENAME, []byte(data), 0666)
+	err := os.WriteFile(courseLinksFilename, []byte(data.String()), 0o666)
 
 	return err
 }
 
 func storeSubscriptions() error {
-	var data string
+	var data strings.Builder
 	log.Println("INFO: Storing subscriptions")
 
 	for course, userIDs := range userSubscriptions {
-		data += fmt.Sprintf("%s\n", course)
+		fmt.Fprintf(&data, "%s\n", course)
 		for _, userID := range userIDs {
-			data += fmt.Sprintf("%s|", userID)
+			fmt.Fprintf(&data, "%s|", userID)
 		}
-		data += "\n"
+		data.WriteString("\n")
 	}
 
-	err := os.WriteFile(SUBSCRIPTIONS_FILENAME, []byte(data), 0666)
+	err := os.WriteFile(subscriptionsFilename, []byte(data.String()), 0o666)
 
 	return err
 }
 
 func storeLatestAnnouncements() error {
-	var data string
+	var data strings.Builder
 	log.Println("INFO: Storing latest announcements")
 
 	for course, announcement := range latestAnnouncements {
-		data += fmt.Sprintf("%s\n%s|%s\n", course, announcement.Message, announcement.Link)
+		fmt.Fprintf(&data, "%s\n%s|%s\n", course, announcement.Message, announcement.Link)
 	}
 
-	err := os.WriteFile(LATEST_ANNOUNCEMENT_FILENAME, []byte(data), 0666)
+	err := os.WriteFile(latestAnnouncementFilename, []byte(data.String()), 0o666)
 
 	return err
 }
@@ -140,7 +149,7 @@ func loadCourseLinks() error {
 
 	log.Println("INFO: Loading courses")
 
-	splitData, err := parseFile(COURSE_LINKS_FILENAME)
+	splitData, err := parseFile(courseLinksFilename)
 	if err != nil {
 		return err
 	}
@@ -159,8 +168,7 @@ func loadSubscriptions() error {
 
 	log.Println("INFO: Loading subscriptions")
 
-	splitData, err := parseFile(SUBSCRIPTIONS_FILENAME)
-
+	splitData, err := parseFile(subscriptionsFilename)
 	if err != nil {
 		return err
 	}
@@ -182,19 +190,18 @@ func loadSubscriptions() error {
 
 func loadLatestAnnouncements() error {
 	log.Println("INFO: Storing latest announcements")
-	splitData, err := parseFile(LATEST_ANNOUNCEMENT_FILENAME)
-
+	splitData, err := parseFile(latestAnnouncementFilename)
 	if err != nil {
 		return err
 	}
 
 	for i := 1; i < len(splitData); i += 2 {
-		announcement_line := strings.Split(splitData[i], "|")
-		if len(announcement_line) < 2 {
+		announcementLine := strings.Split(splitData[i], "|")
+		if len(announcementLine) < 2 {
 			latestAnnouncements[splitData[i-1]] = fenixgoscraper.Announcement{Message: "", Link: ""}
 			continue
 		}
-		latestAnnouncements[splitData[i-1]] = fenixgoscraper.Announcement{Message: announcement_line[0], Link: announcement_line[1]}
+		latestAnnouncements[splitData[i-1]] = fenixgoscraper.Announcement{Message: announcementLine[0], Link: announcementLine[1]}
 	}
 
 	return nil
@@ -204,7 +211,7 @@ func checkStoreFolderExists() error {
 	if _, err := os.Stat(".store"); os.IsNotExist(err) {
 		log.Println("INFO: .store folder does not exist, creating...")
 
-		err = os.Mkdir(".store", 0755)
+		err = os.Mkdir(".store", 0o755)
 		if err != nil {
 			return err
 		}
@@ -228,49 +235,78 @@ func commands(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	case "-follow":
 		if len(content) != 2 {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -follow <course>", m.Author.ID))
+			_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -follow <course>", m.Author.ID))
+			if err != nil {
+				log.Println("WARNING: Error sending follow reply:", err)
+			}
+
 			break
 		}
 
-		follow(s, m, content[1])
+		cmdFollow(s, m, content[1])
 
 	case "-unfollow":
 		if len(content) != 2 {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -follow <course>", m.Author.ID))
+			_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -follow <course>", m.Author.ID))
+			if err != nil {
+				log.Println("WARNING: Error sending unfollow reply:", err)
+			}
+
 			break
 		}
-		unfollow(s, m, content[1])
+
+		cmdUnfollow(s, m, content[1])
 
 	case "-addcourse":
 		if len(content) != 3 {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -addcourse <course> <link>", m.Author.ID))
+			_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Command usage: -addcourse <course> <link>", m.Author.ID))
+			if err != nil {
+				log.Println("WARNING: Error sending follow reply:", err)
+			}
+
 			break
 		}
-		addCourse(s, m, content[1], content[2])
+
+		cmdAddCourse(s, m, content[1], content[2])
 	}
 }
 
-func addCourse(s *discordgo.Session, m *discordgo.MessageCreate, course string, link string) {
+// COMMANDS
+
+func cmdAddCourse(s *discordgo.Session, m *discordgo.MessageCreate, course string, link string) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if courseExists(course) {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course already exists", m.Author.ID))
+		_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course already exists", m.Author.ID))
+		if err != nil {
+			log.Printf("WARNING: Error sending message: %v\n", err)
+		}
 	}
 
 	coursesLinks[course] = link
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> %s added", m.Author.ID, course))
+	_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> %s added", m.Author.ID, course))
+	if err != nil {
+		log.Printf("WARNING: Error sending message: %v\n", err)
+	}
 }
 
 func help(s *discordgo.Session, m *discordgo.MessageCreate) {
-	helpMsg := "## Commands:\n"
-	helpMsg += "- -startfenix - Start service\n"
-	helpMsg += "- -follow <course> - Get notified when new announcements are published in the given course\n"
-	helpMsg += "- -unfollow <course> - Stop getting notifications from the given course\n"
-	helpMsg += "- -addcourse <course> <rss-link> - Add a new course to the notification system\n"
-	helpMsg += "## Current courses\n"
+	var helpMsg strings.Builder
+	helpMsg.WriteString("## Commands:\n")
+	helpMsg.WriteString("- -startfenix - Start service\n")
+	helpMsg.WriteString("- -follow <course> - Get notified when new announcements are published in the given course\n")
+	helpMsg.WriteString("- -unfollow <course> - Stop getting notifications from the given course\n")
+	helpMsg.WriteString("- -addcourse <course> <rss-link> - Add a new course to the notification system\n")
+	helpMsg.WriteString("## Current courses\n")
 	for course := range coursesLinks {
-		helpMsg += fmt.Sprintf("- %s\n", course)
+		fmt.Fprintf(&helpMsg, "- %s\n", course)
 	}
 
-	s.ChannelMessageSend(m.ChannelID, helpMsg)
+	_, err := s.ChannelMessageSend(m.ChannelID, helpMsg.String())
+	if err != nil {
+		log.Printf("WARNING: Error sending message %v\n", err)
+	}
 }
 
 func startfenix(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -282,7 +318,10 @@ func startfenix(s *discordgo.Session, m *discordgo.MessageCreate) {
 	go fenixFetcher(s, m)
 }
 
-func follow(s *discordgo.Session, m *discordgo.MessageCreate, course string) {
+func cmdFollow(s *discordgo.Session, m *discordgo.MessageCreate, course string) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if !courseExists(course) {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course does not exist", m.Author.ID))
 		return
@@ -297,7 +336,10 @@ func follow(s *discordgo.Session, m *discordgo.MessageCreate, course string) {
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Followed %s", m.Author.ID, course))
 }
 
-func unfollow(s *discordgo.Session, m *discordgo.MessageCreate, course string) {
+func cmdUnfollow(s *discordgo.Session, m *discordgo.MessageCreate, course string) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if !courseExists(course) {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("<@%s> Course does not exist", m.Author.ID))
 		return
@@ -324,41 +366,57 @@ func courseExists(course string) bool {
 }
 
 func parseAnnouncements(announcement fenixgoscraper.Announcement, course string) string {
-	msg := ""
+	var msg strings.Builder
 	for i := 0; i < len(userSubscriptions[course]); i++ {
-		msg += fmt.Sprintf("<@%s>\n", userSubscriptions[course][i])
+		fmt.Fprintf(&msg, "<@%s>\n", userSubscriptions[course][i])
 	}
 
-	msg += fmt.Sprintf("%s\n", course)
+	fmt.Fprintf(&msg, "%s\n", course)
 	if announcement.Message == "" {
 		return ""
 	}
 
-	msg += fmt.Sprintf("%s\n", announcement.Message)
-	msg += fmt.Sprintf("%s\n", announcement.Link)
-	return msg
+	fmt.Fprintf(&msg, "%s\n", announcement.Message)
+	fmt.Fprintf(&msg, "%s\n", announcement.Link)
+	return msg.String()
 }
 
 func fenixFetcher(s *discordgo.Session, m *discordgo.MessageCreate) error {
 	running = true
-
 	s.ChannelMessageSend(m.ChannelID, "Starting Service")
 
 	for {
 		time.Sleep(5 * time.Second)
-		data, err := fenixgoscraper.Scrape(coursesLinks, 1)
 
+		mu.RLock()
+		coursesCpy := make(map[string]string) // Create a copy to facilitate concurrency
+		maps.Copy(coursesCpy, coursesLinks)
+		mu.RUnlock()
+
+		data, err := fenixgoscraper.Scrape(coursesCpy, 1)
 		if err != nil {
 			log.Println("WARNING: Fetcher failure", err)
 		}
 
 		for course, announcements := range data {
-			if latestAnnouncements[course].Link == announcements[0].Link {
+			latestAnnouncement := announcements[0]
+
+			mu.RLock()
+			oldLatestAnnouncement, exists := latestAnnouncements[course]
+			mu.RUnlock()
+
+			if exists && oldLatestAnnouncement.Link == latestAnnouncement.Link {
 				continue
 			}
 
+			mu.Lock()
 			latestAnnouncements[course] = announcements[0]
-			s.ChannelMessageSend(m.ChannelID, parseAnnouncements(announcements[0], course))
+			mu.Unlock()
+
+			_, err := s.ChannelMessageSend(m.ChannelID, parseAnnouncements(latestAnnouncement, course))
+			if err != nil {
+				log.Printf("WARNING: Error sending message: %v\n", err)
+			}
 		}
 	}
 }

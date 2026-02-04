@@ -1,7 +1,5 @@
 github.com/PuerkitoBio/goquery v1.10.3 h1:pFYcNSqHxBD06Fpj/KsbStFRsgRATgnf3LeXiUkhzPo=
 github.com/PuerkitoBio/goquery v1.10.3/go.mod h1:tMUX0zDMHXYlAQk6p35XxQMqMweEKB7iK7iLNd4RH4Y=
-github.com/WoodWood1299/fenixgoscraper v0.0.0-20250918215436-39ba11e451df h1:llAtriLs2YnieJi/V1ya4uMR86pd1flT6CTSSWnTWXo=
-github.com/WoodWood1299/fenixgoscraper v0.0.0-20250918215436-39ba11e451df/go.mod h1:DEOTW3lJuXBnXcs3do1jbtuD119swHUWChNd1NYck5s=
 github.com/WoodWood1299/fenixgoscraper v1.0.0 h1:a7bE4zRm8cint0JzDPW2lvU29Z9JFHFMhDqVAgOn7io=
 github.com/WoodWood1299/fenixgoscraper v1.0.0/go.mod h1:tqz2S6GtmMOtcKVsLfVj9y0Zc+ZyzRCEgMPjAyNDEII=
 github.com/andybalholm/cascadia v1.3.3 h1:AG2YHrzJIm4BZ19iwJ/DAua6Btl3IwJX+VI4kktS1LM=
