@@ -42,10 +42,11 @@ var commands = []*discordgo.ApplicationCommand{
 		Description: "Subscribe to a course",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "course",
-				Description: "Course name to follow",
-				Required:    true,
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "course",
+				Description:  "Course name to follow",
+				Required:     true,
+				Autocomplete: true,
 			},
 		},
 	},
@@ -54,10 +55,11 @@ var commands = []*discordgo.ApplicationCommand{
 		Description: "Unsubscribe from a course",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "course",
-				Description: "Course name to unfollow",
-				Required:    true,
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "course",
+				Description:  "Course name to unfollow",
+				Required:     true,
+				Autocomplete: true,
 			},
 		},
 	},
@@ -116,6 +118,7 @@ func NewBot(token, guildID string) (*Bot, error) {
 	}
 
 	session.AddHandler(bot.handleInteraction)
+
 	session.Identify.Intents = discordgo.IntentsGuilds
 	return bot, nil
 }
@@ -152,10 +155,16 @@ func (b *Bot) Close() error {
 
 func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Only handle application commands
-	if i.Type != discordgo.InteractionApplicationCommand {
-		return
-	}
+	switch i.Type {
+	case discordgo.InteractionApplicationCommand:
+		b.handleCommand(s, i)
 
+	case discordgo.InteractionApplicationCommandAutocomplete:
+		b.handleAutocomplete(s, i)
+	}
+}
+
+func (b *Bot) handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	data := i.ApplicationCommandData()
 
 	switch data.Name {
@@ -174,6 +183,53 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 		link := data.Options[1].StringValue()
 		b.cmdAddCourse(s, i, course, link)
 	}
+}
+
+func (b *Bot) handleAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ApplicationCommandData()
+
+	var input string
+	for _, opt := range data.Options {
+		if opt.Focused {
+			input = opt.StringValue()
+			break
+		}
+	}
+
+	choices := b.getMatchingChoices(input)
+
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
+	if err != nil {
+		log.Printf("WARNING: Failed to respond to Autocomplete: %v", err)
+	}
+}
+
+func (b *Bot) getMatchingChoices(input string) []*discordgo.ApplicationCommandOptionChoice {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	input = strings.ToLower(input)
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0)
+
+	for course := range b.coursesLinks {
+		if strings.Contains(strings.ToLower(course), input) {
+			choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+				Name:  course,
+				Value: course,
+			})
+
+			if len(choices) >= 25 {
+				break
+			}
+		}
+	}
+
+	return choices
 }
 
 func (b *Bot) respondToInteraction(s *discordgo.Session, i *discordgo.InteractionCreate, content string) {
