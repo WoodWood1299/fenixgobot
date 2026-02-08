@@ -81,6 +81,19 @@ var commands = []*discordgo.ApplicationCommand{
 			},
 		},
 	},
+	{
+		Name:        "removecourse",
+		Description: "Remove a course from the monitoring system",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:         discordgo.ApplicationCommandOptionString,
+				Name:         "course",
+				Description:  "Course name",
+				Required:     true,
+				Autocomplete: true,
+			},
+		},
+	},
 }
 
 //var (
@@ -182,6 +195,9 @@ func (b *Bot) handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		course := data.Options[0].StringValue()
 		link := data.Options[1].StringValue()
 		b.cmdAddCourse(s, i, course, link)
+	case "removecourse":
+		course := data.Options[0].StringValue()
+		b.cmdRemoveCourse(s, i, course)
 	}
 }
 
@@ -258,11 +274,13 @@ func (b *Bot) respondEphemeral(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 }
 
+// Command Handlers
+
 func (b *Bot) cmdAddCourse(s *discordgo.Session, i *discordgo.InteractionCreate, course string, link string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// if courseExists(course) {
+	// if course exists
 	if _, exists := b.coursesLinks[course]; exists {
 		b.respondEphemeral(s, i, fmt.Sprintf("Course '%s' already exists", course))
 		return
@@ -274,7 +292,21 @@ func (b *Bot) cmdAddCourse(s *discordgo.Session, i *discordgo.InteractionCreate,
 	b.respondToInteraction(s, i, fmt.Sprintf("Course '%s' added successfully", course))
 }
 
-// Command Handlers
+func (b *Bot) cmdRemoveCourse(s *discordgo.Session, i *discordgo.InteractionCreate, course string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// if course doesn't exist
+	if _, exists := b.coursesLinks[course]; !exists {
+		b.respondEphemeral(s, i, fmt.Sprintf("Course '%s' doesn't exist", course))
+	}
+
+	delete(b.coursesLinks, course)
+	delete(b.userSubscriptions, course)
+	delete(b.latestAnnouncements, course)
+
+	b.respondToInteraction(s, i, fmt.Sprintf("Course '%s' deleted successfully", course))
+}
 
 func (b *Bot) cmdHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	var helpMsg strings.Builder
@@ -284,7 +316,8 @@ func (b *Bot) cmdHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	helpMsg.WriteString("- /startfenix - Start monitoring\n")
 	helpMsg.WriteString("- /subscribe <course> - Get notified when new announcements are published in the given course\n")
 	helpMsg.WriteString("- /unsubscribe <course> - Stop getting notifications from the given course\n")
-	helpMsg.WriteString("- /addcourse <course> <rss-link> - Add a new course to the notification system\n")
+	helpMsg.WriteString("- /addcourse <course> <rss-link> - Add a new course to the monitoring system\n")
+	helpMsg.WriteString("- /removecourse <course> - Remove a course from the monitoring system\n")
 	helpMsg.WriteString("## Available courses\n")
 
 	b.mu.RLock()
