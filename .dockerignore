@@ -1,0 +1,52 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+.github
+
+# Documentation
+*.md
+README.md
+LICENSE
+CHANGELOG.md
+docs/
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+fenixbot
+main
+app
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+secrets/
+
+# Application data (should be in volumes)
+data/
+*.db
+*.sqlite
+
+# OS files
+Thumbs.db
+.DS_Store

@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	courseLinksFilename        = ".store/courses.store"
-	subscriptionsFilename      = ".store/subscriptions.store"
-	latestAnnouncementFilename = ".store/announcements.store"
-	storeFolderPath            = ".store"
+	courseLinksFilename        = "data/courses.data"
+	subscriptionsFilename      = "data/subscriptions.data"
+	latestAnnouncementFilename = "data/announcements.data"
+	storeFolderPath            = "data"
 	storeFolderPerms           = 0o755
 	storeFilePerms             = 0o666
 	fetchInterval              = 5 * time.Second
@@ -516,7 +516,7 @@ func (b *Bot) storeCourseLinks() error {
 	for course, link := range b.coursesLinks {
 		fmt.Fprintf(&data, "%s\n%s\n", course, link)
 	}
-	if err := os.WriteFile(courseLinksFilename, []byte(data.String()), 0o666); err != nil {
+	if err := os.WriteFile(courseLinksFilename, []byte(data.String()), storeFilePerms); err != nil {
 		return fmt.Errorf("failed to write course links: %w", err)
 	}
 
@@ -538,7 +538,7 @@ func (b *Bot) storeSubscriptions() error {
 		data.WriteString("\n")
 	}
 
-	if err := os.WriteFile(subscriptionsFilename, []byte(data.String()), 0o666); err != nil {
+	if err := os.WriteFile(subscriptionsFilename, []byte(data.String()), storeFilePerms); err != nil {
 		return fmt.Errorf("failed to write subscriptions: %w", err)
 	}
 
@@ -556,7 +556,7 @@ func (b *Bot) storeLatestAnnouncements() error {
 		fmt.Fprintf(&data, "%s\n%s|%s\n", course, announcement.Message, announcement.Link)
 	}
 
-	if err := os.WriteFile(latestAnnouncementFilename, []byte(data.String()), 0o666); err != nil {
+	if err := os.WriteFile(latestAnnouncementFilename, []byte(data.String()), storeFilePerms); err != nil {
 		return fmt.Errorf("failed to write announcement: %w", err)
 	}
 
@@ -637,7 +637,7 @@ func (b *Bot) loadSubscriptions() error {
 }
 
 func (b *Bot) loadLatestAnnouncements() error {
-	log.Println("INFO: Storing latest announcements")
+	log.Println("INFO: Loading latest announcements")
 
 	splitData, err := parseFile(latestAnnouncementFilename)
 	if err != nil {
@@ -672,8 +672,8 @@ func (b *Bot) loadLatestAnnouncements() error {
 }
 
 func checkStoreFolderExists() error {
-	if _, err := os.Stat(".store"); os.IsNotExist(err) {
-		log.Println("INFO: .store folder does not exist, creating...")
+	if _, err := os.Stat(storeFolderPath); os.IsNotExist(err) {
+		log.Printf("INFO: %s folder does not exist, creating...", storeFolderPath)
 
 		if err = os.Mkdir(storeFolderPath, storeFolderPerms); err != nil {
 			return err
