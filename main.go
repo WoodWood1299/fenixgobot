@@ -25,6 +25,7 @@ const (
 	storeFolderPerms           = 0o755
 	storeFilePerms             = 0o666
 	fetchInterval              = 5 * time.Second
+	backupInterval             = 12 * time.Hour
 )
 
 // TODO Make into unordered map
@@ -452,8 +453,11 @@ func (b *Bot) formatAnnouncements(announcement fenixgoscraper.Announcement, cour
 // Announcement Fetcher
 
 func (b *Bot) fenixFetcher(ctx context.Context, channelID string) error {
-	ticker := time.NewTicker(fetchInterval)
-	defer ticker.Stop()
+	fetcherTicker := time.NewTicker(fetchInterval)
+	defer fetcherTicker.Stop()
+
+	backupTicker := time.NewTicker(backupInterval)
+	defer backupTicker.Stop()
 
 	for {
 		select {
@@ -461,7 +465,7 @@ func (b *Bot) fenixFetcher(ctx context.Context, channelID string) error {
 			log.Println("INFO: Fenix fetcher stopped")
 			return ctx.Err()
 
-		case <-ticker.C:
+		case <-fetcherTicker.C:
 			b.mu.RLock()
 			courses := make(map[string]string)
 			maps.Copy(courses, b.coursesLinks)
@@ -500,6 +504,11 @@ func (b *Bot) fenixFetcher(ctx context.Context, channelID string) error {
 				if message != "" {
 					b.sendMessage(b.session, channelID, message)
 				}
+			}
+
+		case <-backupTicker.C:
+			if err := b.saveAllData(); err != nil {
+				log.Printf("WARNING: Error storing backup: %v\n", err)
 			}
 		}
 	}
@@ -752,6 +761,6 @@ func run() error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sigChan
 
-	log.Println("IFNO: Shutdown signal received, saving data")
+	log.Println("INFO: Shutdown signal received, saving data")
 	return b.saveAllData()
 }
