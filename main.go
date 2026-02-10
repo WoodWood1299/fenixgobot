@@ -287,6 +287,12 @@ func (b *Bot) cmdAddCourse(s *discordgo.Session, i *discordgo.InteractionCreate,
 		return
 	}
 
+	m := map[string]string{course: link}
+	if _, err := fenixgoscraper.Scrape(m, 1); err != nil {
+		b.respondEphemeral(s, i, "Invalid link or problem fetching RSS")
+		return
+	}
+
 	b.coursesLinks[course] = link
 	b.userSubscriptions[course] = make([]string, 0)
 
