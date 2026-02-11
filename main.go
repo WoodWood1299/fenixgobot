@@ -97,14 +97,6 @@ var commands = []*discordgo.ApplicationCommand{
 	},
 }
 
-//var (
-//	coursesLinks             = make(map[string]string)
-//	userSubscriptions        = make(map[string][]string)
-//	latestAnnouncements      = make(map[string]fenixgoscraper.Announcement)
-//	running             bool = false
-//	mu                  sync.RWMutex
-//)
-
 type Bot struct {
 	session             *discordgo.Session
 	coursesLinks        map[string]string
@@ -114,6 +106,7 @@ type Bot struct {
 	running             bool
 	runningMu           sync.Mutex
 	fetcherCancel       context.CancelFunc
+	backupCancel        context.CancelFunc
 	guildID             string
 }
 
@@ -154,6 +147,16 @@ func (b *Bot) Start() error {
 	}
 
 	log.Printf("INFO: Registered %d guild commands", len(registeredCommands))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	b.backupCancel = cancel
+
+	go func() {
+		if err := b.backupHandler(ctx); err != nil && err != context.Canceled {
+			log.Printf("WARNING: Backup handler stopped with error: %v\n", err)
+		}
+	}()
+
 	return nil
 }
 
@@ -168,7 +171,6 @@ func (b *Bot) Close() error {
 }
 
 func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// Only handle application commands
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
 		b.handleCommand(s, i)
@@ -462,9 +464,6 @@ func (b *Bot) fenixFetcher(ctx context.Context, channelID string) error {
 	fetcherTicker := time.NewTicker(fetchInterval)
 	defer fetcherTicker.Stop()
 
-	backupTicker := time.NewTicker(backupInterval)
-	defer backupTicker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -511,10 +510,25 @@ func (b *Bot) fenixFetcher(ctx context.Context, channelID string) error {
 					b.sendMessage(b.session, channelID, message)
 				}
 			}
+		}
+	}
+}
+
+func (b *Bot) backupHandler(ctx context.Context) error {
+	backupTicker := time.NewTicker(backupInterval)
+	defer backupTicker.Stop()
+
+	log.Println("INFO: Starting Backup Handler")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("INFO: Backup handler stopped")
+			return ctx.Err()
 
 		case <-backupTicker.C:
 			if err := b.saveAllData(); err != nil {
-				log.Printf("WARNING: Error storing backup: %v\n", err)
+				log.Printf("WARNING: Error creating backup: %v", err)
 			}
 		}
 	}
@@ -590,13 +604,6 @@ func parseFile(fileName string) ([]string, error) {
 func (b *Bot) loadCourseLinks() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
-	/*
-		coursesLinks["OC"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/OC112/2025-2026/1-semestre/rss/announcement"
-		coursesLinks["Aprendizagem"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/Apre2222/2025-2026/1-semestre/rss/announcement"
-		coursesLinks["RC"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/RC112/2025-2026/1-semestre/rss/announcement"
-		coursesLinks["AMS"] = "https://fenix.tecnico.ulisboa.pt/disciplinas/Mod112/2025-2026/1-semestre/rss/announcement"
-	*/
 
 	log.Println("INFO: Loading courses")
 
